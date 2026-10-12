@@ -25,3 +25,22 @@ These can be the same URL in simple LAN setups.
 - The refresh control uses an HTML form submit to avoid browser-side CORS
   complexity for cross-origin `fetch`.
 - After submit, the page reloads so the word widget re-reads `GET /word`.
+
+## Testing
+
+- Local container/API smoke test:
+
+  ```bash
+  ./scripts/smoke_glance_integration.sh
+  ```
+
+- Full dashboard validation runbook:
+
+  - `docs/operations/glance-integration-smoke-test.md`
+
+## Compatibility and limitations
+
+- This example is written for current `glance-app` config semantics for `custom-api`
+  and `html` widgets.
+- Refresh behavior depends on an HTML form submit + page reload pattern, not a native
+  Glance action button API.

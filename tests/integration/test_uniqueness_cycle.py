@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -51,7 +52,7 @@ def _write_seed_words(path: Path) -> None:
     path.write_text("og\n", encoding="utf-8")
 
 
-def test_cycle_resets_after_all_words_used(tmp_path: Path) -> None:
+def test_cycle_resets_after_all_words_used(tmp_path: Path, caplog) -> None:
     """Increment cycle ID when all words in finite dataset are consumed."""
 
     db_path = tmp_path / "service.db"
@@ -67,6 +68,7 @@ def test_cycle_resets_after_all_words_used(tmp_path: Path) -> None:
             seed_words_path=str(seed_path),
         )
     )
+    caplog.set_level(logging.INFO, logger="vocab_generator")
     client = TestClient(app)
 
     first_word = client.get("/word")
@@ -84,3 +86,12 @@ def test_cycle_resets_after_all_words_used(tmp_path: Path) -> None:
     assert second_payload["word_id"] != first_payload["word_id"]
     assert third_payload["cycle_id"] == 2
     assert third_payload["word_id"] in {"no-001", "no-002"}
+
+    entries = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "vocab_generator"
+    ]
+    cycle_reset_events = [entry for entry in entries if entry.get("event") == "cycle_reset"]
+    assert cycle_reset_events
+    assert cycle_reset_events[-1]["cycle_id"] == 2

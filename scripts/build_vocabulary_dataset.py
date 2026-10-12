@@ -43,6 +43,15 @@ SKIP_GLOSS_PREFIXES = (
     "abbreviation of",
 )
 
+INFLECTION_OF_RE = re.compile(
+    r"^(?:"
+    r"definite|indefinite|feminine|masculine|neuter|plural|singular|"
+    r"comparative|superlative|present|past|imperative|participle|"
+    r"attributive|genitive|inflection"
+    r").*\bof\b",
+    flags=re.IGNORECASE,
+)
+
 
 def clean_text(value: str) -> str:
     """Normalize whitespace and trim punctuation noise.
@@ -140,7 +149,11 @@ def is_usable_gloss(gloss: str) -> bool:
     """
 
     lowered = gloss.lower()
-    return not lowered.startswith(SKIP_GLOSS_PREFIXES)
+    if lowered.startswith(SKIP_GLOSS_PREFIXES):
+        return False
+    if INFLECTION_OF_RE.match(lowered):
+        return False
+    return True
 
 
 def build_dataset(max_entries: int) -> tuple[list[dict[str, str]], dict[str, object]]:

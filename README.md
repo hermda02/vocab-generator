@@ -1,31 +1,36 @@
 # vocab-generator
 
-Simple Docker project for a local-network Norwegian vocabulary service.
+Local-network Docker service that generates random Norwegian vocabulary entries
+with English equivalents and bilingual definitions.
 
-## Phase 0 status
+## Overview
 
-- FastAPI service skeleton
-- SQLite readiness check
-- `GET /health` endpoint
-- Docker healthcheck
-- CI workflow for tests and image build
+- Designed for self-hosted LAN use and integration with other local services.
+- Persists active/used-word state in SQLite to avoid duplicates within a cycle.
+- Applies a baseline pre-used common-word seed list before normal generation.
+- Exposes a simple REST API for fetch, refresh, health, and metrics.
 
-## Phase 1 status
+## Functionality
 
-- Bundled static dataset at `data/vocabulary.json`
-- Baseline pre-used seed list at `data/seed/top500_common_norwegian.txt`
-- `GET /word` endpoint with active-word persistence in SQLite
-- Deterministic error contracts (`DB_UNAVAILABLE`, `DATASET_UNAVAILABLE`)
+- `GET /word`
+  - returns the current active vocabulary entry.
+  - if no active entry exists, selects and persists one from the static dataset.
+- `POST /word/new`
+  - marks the previous active word as used and returns a new unique entry.
+- `GET /health`
+  - returns service readiness (`ok`/`degraded`) based on API + DB state.
+- `GET /metrics`
+  - returns in-memory request/error/cycle telemetry.
 
-## Phase 3 status
+- Deterministic error contracts:
+  - `DB_UNAVAILABLE`
+  - `DATASET_UNAVAILABLE`
 
-- Structured request logs with request IDs and latency measurements
-- Domain event logs (`word_generated`, `word_replaced`, `cycle_reset`)
-- In-memory metrics endpoint at `GET /metrics`
-- Load-test asset at `tests/perf/get_word.js`
+## Data Sources
 
-Seed list provenance: `data/seed/top500_common_norwegian.txt` is normalized from
-https://www.korrekturavdelingen.no/ord-uttrykk-frekvensordliste-500-vanligste-norsk.htm.
+- Static vocabulary dataset: `data/vocabulary.json`
+- Baseline seed list: `data/seed/top500_common_norwegian.txt`
+- Seed list provenance: https://www.korrekturavdelingen.no/ord-uttrykk-frekvensordliste-500-vanligste-norsk.htm
 
 ## Run locally (without Docker)
 

@@ -1,0 +1,51 @@
+name: Vocabulary
+slug: vocabulary
+columns:
+  - size: full
+    widgets:
+      - type: custom-api
+        title: Norwegian Word of the Moment
+        cache: 5s
+        url: ${VOCAB_API_INTERNAL_URL}/word
+        template: |
+          <div class="flex flex-column gap-10">
+            <div>
+              <div class="size-h3 color-highlight">{{ .JSON.String "norwegian_word" }}</div>
+              <div class="size-h5 color-paragraph">{{ .JSON.String "english_word" }}</div>
+            </div>
+
+            <div>
+              <div class="size-h6 color-paragraph">Norwegian definition</div>
+              <div class="size-h5">{{ .JSON.String "norwegian_definition" }}</div>
+            </div>
+
+            <div>
+              <div class="size-h6 color-paragraph">English definition</div>
+              <div class="size-h5">{{ .JSON.String "english_definition" }}</div>
+            </div>
+
+            <ul class="list-horizontal-text size-h6">
+              <li>word_id: {{ .JSON.String "word_id" }}</li>
+              <li>cycle: {{ .JSON.Int "cycle_id" }}</li>
+            </ul>
+          </div>
+
+      - type: html
+        title: Refresh Word
+        source: |
+          <form method="post" action="${VOCAB_API_BROWSER_URL}/word/new" target="vocab-refresh-target" onsubmit="setTimeout(function(){window.location.reload();}, 350)">
+            <button class="button" type="submit">Generate New Word</button>
+          </form>
+          <p class="size-h6 color-paragraph" style="margin-top:.5rem;">
+            Click to replace the active word, then this page reloads.
+          </p>
+          <iframe name="vocab-refresh-target" style="display:none;"></iframe>
+
+      - type: custom-api
+        title: Service Health
+        cache: 15s
+        url: ${VOCAB_API_INTERNAL_URL}/health
+        template: |
+          <div class="size-h5">
+            status: <span class="color-highlight">{{ .JSON.String "status" }}</span>
+          </div>

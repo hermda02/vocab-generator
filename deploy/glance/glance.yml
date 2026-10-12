@@ -1,0 +1,10 @@
+# Example Glance configuration for Norwegian Vocabulary service integration.
+#
+# Required environment variables:
+# - VOCAB_API_INTERNAL_URL: URL reachable from the Glance server/container
+#   (example: http://vocab-generator:8080)
+# - VOCAB_API_BROWSER_URL: URL reachable from the browser for button-triggered POST
+#   (example: http://192.168.1.20:8080)
+
+pages:
+  - $include: pages/vocabulary.yml

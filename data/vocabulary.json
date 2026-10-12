@@ -1,0 +1,23 @@
+[
+  {
+    "word_id": "no-001",
+    "norwegian_word": "havn",
+    "english_word": "harbor",
+    "norwegian_definition": "Et beskyttet omrade langs kysten der skip kan legge til.",
+    "english_definition": "A sheltered coastal area where ships can dock."
+  },
+  {
+    "word_id": "no-002",
+    "norwegian_word": "skog",
+    "english_word": "forest",
+    "norwegian_definition": "Et stort omrade dekket av trer og annen vegetasjon.",
+    "english_definition": "A large area covered with trees and other vegetation."
+  },
+  {
+    "word_id": "no-003",
+    "norwegian_word": "fjell",
+    "english_word": "mountain",
+    "norwegian_definition": "En hoy landformasjon som rager over omgivelsene.",
+    "english_definition": "A high natural elevation rising prominently above its surroundings."
+  }
+]

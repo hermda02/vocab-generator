@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import random
 import sqlite3
+import time
 from datetime import UTC, datetime
+from uuid import uuid4
 
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.config import Settings, load_settings
@@ -24,6 +28,7 @@ from app.repository import (
     upsert_active_word,
 )
 from app.seed import load_seed_words
+from app.telemetry import MetricsStore, emit_json_log, utc_timestamp
 
 
 def _record_to_payload(record: ActiveWordRecord) -> dict[str, str | int]:
@@ -72,6 +77,7 @@ def _degraded_db_response(detail: str | None) -> JSONResponse:
             "error_code": "DB_UNAVAILABLE",
             "detail": detail,
         },
+        headers={"x-error-code": "DB_UNAVAILABLE"},
     )
 
 
@@ -95,6 +101,35 @@ def _dataset_unavailable_response(detail: str) -> JSONResponse:
             "status": "degraded",
             "error_code": "DATASET_UNAVAILABLE",
             "detail": detail,
+        },
+        headers={"x-error-code": "DATASET_UNAVAILABLE"},
+    )
+
+
+def _log_domain_event(
+    app: FastAPI,
+    event_name: str,
+    payload: dict[str, object],
+) -> None:
+    """Emit a domain lifecycle event log entry.
+
+    Parameters
+    ----------
+    app : FastAPI
+        Active application instance.
+    event_name : str
+        Domain event name.
+    payload : dict[str, object]
+        Event payload.
+    """
+
+    logger: logging.Logger = app.state.logger
+    emit_json_log(
+        logger,
+        {
+            "timestamp": utc_timestamp(),
+            "event": event_name,
+            **payload,
         },
     )
 
@@ -170,7 +205,7 @@ def _select_entry_for_cycle(
     db_path: str,
     dataset_entries: list[VocabularyEntry],
     seed_words: set[str],
-) -> tuple[VocabularyEntry | None, int]:
+) -> tuple[VocabularyEntry | None, int, bool]:
     """Select an available entry for the current cycle with reset-on-exhaustion.
 
     Parameters
@@ -184,9 +219,10 @@ def _select_entry_for_cycle(
 
     Returns
     -------
-    tuple[VocabularyEntry | None, int]
+    tuple[VocabularyEntry | None, int, bool]
         Selected entry and cycle ID used for the selection. Entry is ``None``
-        when no selectable entry remains after baseline filtering.
+        when no selectable entry remains after baseline filtering. Final boolean
+        indicates whether a cycle reset occurred.
     """
 
     cycle_id = get_current_cycle_id(db_path)
@@ -199,7 +235,7 @@ def _select_entry_for_cycle(
     used_word_ids = get_used_word_ids(db_path=db_path, cycle_id=cycle_id)
     selected_entry = _select_first_active_entry_excluding_used(dataset_entries, used_word_ids)
     if selected_entry is not None:
-        return selected_entry, cycle_id
+        return selected_entry, cycle_id, False
 
     next_cycle_id = increment_current_cycle_id(db_path)
     initialize_baseline_used_words(
@@ -210,7 +246,7 @@ def _select_entry_for_cycle(
     )
     used_word_ids = get_used_word_ids(db_path=db_path, cycle_id=next_cycle_id)
     selected_entry = _select_first_active_entry_excluding_used(dataset_entries, used_word_ids)
-    return selected_entry, next_cycle_id
+    return selected_entry, next_cycle_id, True
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -229,7 +265,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     resolved_settings = settings or load_settings()
     app = FastAPI(title="Norwegian Vocabulary LAN Service", version="0.1.0")
+    app.state.logger = logging.getLogger("vocab_generator")
+    app.state.logger.setLevel(logging.INFO)
+    if not app.state.logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        app.state.logger.addHandler(handler)
+    app.state.metrics = MetricsStore()
     app.state.settings = resolved_settings
+
+    @app.middleware("http")
+    async def request_logging_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        """Capture structured request logs and update in-memory metrics."""
+
+        request_id = str(uuid4())
+        start = time.perf_counter()
+        response = await call_next(request)
+        latency_ms = round((time.perf_counter() - start) * 1000, 3)
+        response.headers["x-request-id"] = request_id
+
+        error_code = response.headers.get("x-error-code")
+
+        app.state.metrics.observe_request(request.url.path, latency_ms)
+        if error_code is not None:
+            app.state.metrics.observe_error_code(error_code)
+
+        log_payload: dict[str, object] = {
+            "timestamp": utc_timestamp(),
+            "event": "request",
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "request_id": request_id,
+            "latency_ms": latency_ms,
+        }
+        if error_code is not None:
+            log_payload["error_code"] = error_code
+        emit_json_log(app.state.logger, log_payload)
+        return response
 
     @app.get("/health", response_model=None)
     def get_health() -> JSONResponse:
@@ -263,6 +336,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ensure_schema(app.state.settings.db_path)
             active_record = get_active_word(app.state.settings.db_path)
             if active_record is not None:
+                app.state.metrics.set_cycle_id(active_record.cycle_id)
                 return JSONResponse(status_code=200, content=_record_to_payload(active_record))
         except sqlite3.Error as exc:
             return _degraded_db_response(detail=str(exc))
@@ -273,7 +347,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return _dataset_unavailable_response(detail=str(exc))
 
         try:
-            selected_entry, cycle_id = _select_entry_for_cycle(
+            selected_entry, cycle_id, did_cycle_reset = _select_entry_for_cycle(
                 db_path=app.state.settings.db_path,
                 dataset_entries=dataset_entries,
                 seed_words=seed_words,
@@ -294,8 +368,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cycle_id=cycle_id,
                 generated_at=generated_at,
             )
+            app.state.metrics.set_cycle_id(stored_record.cycle_id)
         except sqlite3.Error as exc:
             return _degraded_db_response(detail=str(exc))
+
+        if did_cycle_reset:
+            _log_domain_event(
+                app,
+                "cycle_reset",
+                {
+                    "cycle_id": cycle_id,
+                },
+            )
+        _log_domain_event(
+            app,
+            "word_generated",
+            {
+                "word_id": stored_record.word_id,
+                "cycle_id": stored_record.cycle_id,
+            },
+        )
 
         return JSONResponse(status_code=200, content=_record_to_payload(stored_record))
 
@@ -330,7 +422,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     source="refresh_previous_active",
                 )
 
-            selected_entry, cycle_id = _select_entry_for_cycle(
+            selected_entry, cycle_id, did_cycle_reset = _select_entry_for_cycle(
                 db_path=app.state.settings.db_path,
                 dataset_entries=dataset_entries,
                 seed_words=seed_words,
@@ -351,10 +443,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cycle_id=cycle_id,
                 generated_at=generated_at,
             )
+            app.state.metrics.set_cycle_id(stored_record.cycle_id)
         except sqlite3.Error as exc:
             return _degraded_db_response(detail=str(exc))
 
+        if did_cycle_reset:
+            _log_domain_event(
+                app,
+                "cycle_reset",
+                {
+                    "cycle_id": cycle_id,
+                },
+            )
+        _log_domain_event(
+            app,
+            "word_replaced",
+            {
+                "word_id": stored_record.word_id,
+                "cycle_id": stored_record.cycle_id,
+            },
+        )
+
         return JSONResponse(status_code=200, content=_record_to_payload(stored_record))
+
+    @app.get("/metrics", response_model=None)
+    def get_metrics() -> JSONResponse:
+        """Return in-memory telemetry metrics.
+
+        Returns
+        -------
+        JSONResponse
+            Metrics payload for request/error/cycle observability.
+        """
+
+        return JSONResponse(status_code=200, content=app.state.metrics.to_payload())
 
     return app
 

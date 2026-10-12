@@ -1,0 +1,25 @@
+services:
+  vocab-generator:
+    build:
+      context: .
+    container_name: vocab-generator
+    restart: unless-stopped
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      DB_PATH: /data/vocab.db
+      DATASET_PATH: /app/data/vocabulary.json
+      SEED_WORDS_PATH: /app/data/seed/top500_common_norwegian.txt
+    ports:
+      - "8080:8080"
+    volumes:
+      - vocab_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  vocab_data:

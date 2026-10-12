@@ -19,9 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration and unit test coverage for API contracts, cycle behavior, seed behavior, observability, and Glance asset wiring.
 - Load-test script for `GET /word` latency threshold validation (`tests/perf/get_word.js`).
 - Operations runbooks for observability/alerts and Glance integration smoke testing.
+- Dataset builder script for production vocabulary generation from Kaikki/Wiktextract (`scripts/build_vocabulary_dataset.py`).
 
 ### Changed
 
 - README updated to describe project overview and functionality.
+- Replaced starter vocabulary file with a large generated production dataset (`data/vocabulary.json`, 20,000 entries).
 
 [Unreleased]: https://github.com/hermda02/vocab-generator/compare/main...HEAD

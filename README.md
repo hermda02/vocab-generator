@@ -29,8 +29,10 @@ with English equivalents and bilingual definitions.
 ## Data Sources
 
 - Static vocabulary dataset: `data/vocabulary.json`
+- Dataset provenance metadata: `data/vocabulary-source.json`
 - Baseline seed list: `data/seed/top500_common_norwegian.txt`
 - Seed list provenance: https://www.korrekturavdelingen.no/ord-uttrykk-frekvensordliste-500-vanligste-norsk.htm
+- Vocabulary corpus source: Kaikki/Wiktextract Norwegian Bokmal export
 
 ## Run locally (without Docker)
 

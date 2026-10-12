@@ -1,0 +1,18 @@
+{
+  "source": "Kaikki / Wiktextract (Norwegian Bokmal)",
+  "source_url": "https://kaikki.org/dictionary/Norwegian%20Bokm%C3%A5l/kaikki.org-dictionary-NorwegianBokm%C3%A5l.jsonl",
+  "license_note": "Derived from Wiktionary-extracted data; verify attribution and licensing requirements.",
+  "generated_at": "2026-10-12T11:56:35.116712+00:00",
+  "entries_scanned": 47409,
+  "entries_written": 20000,
+  "filters": {
+    "allowed_pos": [
+      "adj",
+      "adv",
+      "noun",
+      "verb"
+    ],
+    "one_entry_per_word": true,
+    "max_entries": 20000
+  }
+}
